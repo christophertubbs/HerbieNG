@@ -9,4 +9,5 @@ scikit-learn
 toml
 xarray
 httpx
+pydantic
 git+https://github.com/blaylockbk/Carpenter_Workshop.git

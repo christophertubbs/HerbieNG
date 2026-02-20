@@ -29,6 +29,7 @@ import tomllib
 from pathlib import Path
 
 from herbie.misc import ANSI
+from herbie.utils.common import expand_path
 
 __author__ = "Brian K. Blaylock"
 __meet_Herbie__ = "https://en.wikipedia.org/wiki/Herbie"

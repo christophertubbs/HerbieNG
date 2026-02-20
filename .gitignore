@@ -47,6 +47,7 @@ Herbie-Tests-Data/
 data/
 
 src/herbie/_version.py
+src/herbie/resources/config/default.log_override.json
 
 *.pkl
 .coverage

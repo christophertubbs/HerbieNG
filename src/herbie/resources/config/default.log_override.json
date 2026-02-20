@@ -1,0 +1,8 @@
+{
+    "urllib3.connectionpool": "WARNING",
+    "ecmwf.datastores.legacy_client": "WARNING",
+    "multiurl.http": "WARNING",
+    "multiurl.base": "WARNING",
+    "gribapi.bindings": "WARNING",
+    "h5py._conv": "WARNING"
+}

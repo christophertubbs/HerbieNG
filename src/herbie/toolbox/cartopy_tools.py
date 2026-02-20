@@ -23,6 +23,9 @@ but is not yet supported by Cartopy.
 """
 
 import urllib.request
+from typing import Literal
+from typing import Optional
+from typing import Union
 
 import cartopy.crs as ccrs
 import cartopy.feature as feature
@@ -35,8 +38,7 @@ import xarray as xr
 from cartopy.io import shapereader
 from metpy.plots import USCOUNTIES
 
-from typing import Literal, Optional, Union
-from herbie import Path
+from herbie.utils.common import expand_path
 
 try:
     import geopandas
@@ -365,10 +367,10 @@ def get_ETOPO1(
     # The coarsen method is slow, so save a copy to load.
     # The thin method is fast, so don't worry about saving a copy.
     src = f"http://iridl.ldeo.columbia.edu/SOURCES/.NOAA/.NGDC/.ETOPO1/.z_{top}/data.nc"
-    dst = Path(f"$HOME/.local/share/ETOPO1/ETOPO1_{top}.nc").expand()
-    dst_coarsen = Path(
+    dst = expand_path(f"$HOME/.local/share/ETOPO1/ETOPO1_{top}.nc")
+    dst_coarsen = expand_path(
         f"$HOME/.local/share/ETOPO1/ETOPO1_{top}_coarsen-{coarsen}.nc"
-    ).expand()
+    )
 
     if not dst.exists():
         # Download the full ETOPO1 dataset

@@ -5,42 +5,43 @@ TODO: Rename 'fxx' to 'step' and allow pandas-parsable timedelta string like "6h
 TODO: add `idx_to_df()` and `df_to_idx()` methods.
 TODO: There are probably use cases for the `Path().suffixes` method
 """
-
 import functools
 import hashlib
 import itertools
 import json
 import logging
 import os
+import pathlib
 import subprocess
-import urllib.request
+import typing
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime
+from datetime import timedelta
 from io import StringIO
-from pathlib import Path
 from shutil import which
-from typing import Literal, Optional, Union
 from urllib.parse import urlparse
 
 import cfgrib
+import httpx
 import pandas as pd
-import requests
 import xarray as xr
 from pyproj import CRS
 
 import herbie.models as model_templates
-from herbie import Path, config
+from herbie import Path
+from herbie import config
+from herbie.configuration import settings
 from herbie.crs import get_cf_crs
 from herbie.help import _search_help
-from herbie.misc import ANSI
+from herbie.utils.log import get_logger
 
-Datetime = Union[datetime, pd.Timestamp, str]
+Datetime = typing.Union[datetime, pd.Timestamp, str]
 
 # NOTE: The config dict values are retrieved from __init__ and read
 # from the file ${HOME}/.config/herbie/config.toml
 # Path is imported from __init__ because it has my custom methods.
 
-log = logging.getLogger(__name__)
+LOGGER: logging.Logger = get_logger(__file__)
 
 # Location of wgrib2 command, if it exists. Required to make missing idx files.
 wgrib2 = which("wgrib2")
@@ -59,30 +60,38 @@ def _reporthook(a, b, c):
     chunk_progress = a * b / c * 100
     total_size_MB = c / 1000000.0
     print(
-        f"\r🚛💨  Download Progress: {chunk_progress:.2f}% of {total_size_MB:.1f} MB\r",
+        f"\rDownload Progress: {chunk_progress:.2f}% of {total_size_MB:.1f} MB\r",
         end="",
     )
 
 
-def download_with_requests(
-    url, outFile, reporthook=_reporthook, chunk_size=8192, *, verbose=False
+async def download_with_requests(
+    url,
+    output_path: str | pathlib.Path,
+    reporthook=_reporthook,
+    chunk_size=8192,
+    client: httpx.AsyncClient | None = None,
+    *,
+    verbose=False
 ):
+    if client is None:
+        client = httpx.AsyncClient()
+
     """Download a full file using the requests library."""
-    response = requests.get(url, stream=True)
+    response: httpx.Response = await client.get(url)
     response.raise_for_status()
 
     total = int(response.headers.get("content-length", 0))
     downloaded = 0
 
-    with open(outFile, "wb") as f:
-        for chunk in response.iter_content(chunk_size=chunk_size):
+    with open(output_path, "wb") as output_file:
+        async for chunk in response.aiter_raw(chunk_size=chunk_size):
             if not chunk:
                 continue
-
-            f.write(chunk)
+                
+            output_file.write(chunk)
             downloaded += len(chunk)
-
-            # mimic urllib reporthook(count, blocksize, totalsize)
+            
             if reporthook and verbose:
                 reporthook(downloaded // chunk_size, chunk_size, total)
 
@@ -126,7 +135,7 @@ def wgrib2_idx(grib2filepath: Path | str) -> str:
         ) from e
 
 
-def create_index_files(path: Union[Path, str], overwrite: bool = False) -> None:
+def create_index_files(path: typing.Union[Path, str], overwrite: bool = False) -> None:
     """Create an index file for all GRIB2 files in a directory.
 
     Parameters
@@ -213,20 +222,31 @@ class Herbie:
 
     def __init__(
         self,
-        date: Optional[Datetime] = None,
+        date: Datetime | None = None,
         *,
-        valid_date: Optional[Datetime] = None,
+        valid_date: Datetime | None = None,
         model: str = config["default"].get("model"),
         fxx: int = config["default"].get("fxx"),
         product: str = config["default"].get("product"),
-        priority: Union[str, list[str]] = config["default"].get("priority"),
-        save_dir: Union[Path, str] = config["default"].get("save_dir"),
+        priority: str | list[str] = config["default"].get("priority"),
+        save_dir: Path | str = config["default"].get("save_dir"),
         overwrite: bool = config["default"].get("overwrite", False),
         verbose: bool = config["default"].get("verbose", True),
+        client: httpx.AsyncClient = None,
         **kwargs,
     ):
+        self.PRODUCTS: dict[str, str]
+        self.DETAILS: dict[str, str]
+        self.DESCRIPTION: str
+        self.IDX_SUFFIX: list[str]
+        self.LOCALFILE: str
         """Specify model output and find GRIB2 file at one of the sources."""
         self.fxx = fxx
+
+        if client is None:
+            client = httpx.AsyncClient()
+
+        self.client: typing.Final[httpx.AsyncClient] = client
 
         if isinstance(self.fxx, (str, pd.Timedelta)):
             # Convert pandas-parsable timedelta string to int in hours.
@@ -293,7 +313,7 @@ class Herbie:
             # The user didn't specify a product, so let's use the first
             # product in the model template.
             self.product = list(self.PRODUCTS)[0]
-            log.info(f'`product` not specified. Will use "{self.product}".')
+            LOGGER.info(f'`product` not specified. Will use "{self.product}".')
             # We need to rerun this so the sources have the new product value.
             getattr(model_templates, self.model).template(self)
 
@@ -309,39 +329,37 @@ class Herbie:
         self.idx, self.idx_source = self.find_idx()
 
         if verbose:
-            # ANSI colors added for style points
             if any([self.grib is not None, self.idx is not None]):
-                print(
-                    "✅ Found",
-                    f"┊ model={self.model}",
-                    f"┊ {ANSI.italic}product={self.product}{ANSI.reset}",
-                    f"┊ {ANSI.green}{self.date:%Y-%b-%d %H:%M UTC}{ANSI.bright_green} F{self.fxx:02d}{ANSI.reset}",
-                    f"┊ {ANSI.orange}{ANSI.italic}GRIB2 @ {self.grib_source}{ANSI.reset}",
-                    f"┊ {ANSI.orange}{ANSI.italic}IDX @ {self.idx_source}{ANSI.reset}",
+                LOGGER.info(
+                    "Found",
+                    f"| model={self.model}",
+                    f"| product={self.product}",
+                    f"| {self.date:%Y-%b-%d %H:%M UTC} F{self.fxx:02d}",
+                    f"| GRIB2 @ {self.grib_source}",
+                    f"| IDX @ {self.idx_source}",
                 )
             else:
-                print(
-                    "💔 Did not find",
-                    f"┊ model={self.model}",
-                    f"┊ {ANSI.italic}product={self.product}{ANSI.reset}",
-                    f"┊ {ANSI.green}{self.date:%Y-%b-%d %H:%M UTC}{ANSI.bright_green} F{self.fxx:02d}{ANSI.reset}",
+                LOGGER.info(
+                    "Did not find",
+                    f"| model={self.model}",
+                    f"| product={self.product}",
+                    f"| {self.date:%Y-%b-%d %H:%M UTC} F{self.fxx:02d}",
                 )
 
     def __repr__(self) -> str:
         """Representation in Notebook."""
         msg = (
-            f"{ANSI.herbie} {self.model.upper()} model",
-            f"{ANSI.italic}{self.product}{ANSI.reset} product initialized",
-            f"{ANSI.green}{self.date:%Y-%b-%d %H:%M UTC}{ANSI.bright_green} F{self.fxx:02d}{ANSI.reset}",
-            f"┊ {ANSI.orange}{ANSI.italic}source={self.grib_source}{ANSI.reset}",
+            f" {self.model.upper()} model",
+            f"{self.product} product initialized",
+            f"{self.date:%Y-%b-%d %H:%M UTC} F{self.fxx:02d}",
+            f"| source={self.grib_source}",
         )
         return " ".join(msg)
 
     def __str__(self) -> str:
         """When Herbie class object is printed, print all properties."""
         # * Keep this simple so it runs fast.
-        msg = (f"║HERBIE╠ {self.model.upper()}:{self.product}",)
-        return " ".join(msg)
+        return f"Herbie: {self.model.upper()}:{self.product} @ {self.date.strftime('%Y-%m-%d %H:%M:%S')}"
 
     def __bool__(self) -> bool:
         """Herbie evaluated True if the GRIB file exists."""
@@ -374,10 +392,6 @@ class Herbie:
         msg = "\n".join(msg)
         print(msg)
 
-    def __logo__(self) -> None:
-        """For Fun, show the Herbie Logo."""
-        print(ANSI.ascii)
-
     def _validate(self) -> None:
         """Validate the Herbie class input arguments."""
         # Accept model alias
@@ -388,7 +402,7 @@ class Herbie:
         _products = set(self.PRODUCTS)
 
         assert self.date < pd.Timestamp.utcnow().tz_localize(None), (
-            "🔮 `date` cannot be in the future."
+            "`date` cannot be in the future."
         )
         assert self.model in _models, f"`model` must be one of {_models}"
         assert self.product in _products, f"`product` must be one of {_products}"
@@ -412,15 +426,22 @@ class Herbie:
                 if self.date < expired:
                     self.priority.remove("nomads")
 
-    def _ping_pando(self) -> None:
+    async def _ping_pando(self, client: httpx.AsyncClient | None = None) -> bool:
         """Pinging the Pando server before downloading can prevent a bad handshake."""
         try:
-            requests.head("https://pando-rgw01.chpc.utah.edu/")
+            if client is None:
+                client = self.client
+            response: httpx.Response = await client.head(settings.pando_url)
+            return response.is_success
         except Exception:
-            print("🤝🏻⛔ Bad handshake with pando? Am I able to move on?")
-            pass
+            LOGGER.error("Bad handshake with pando - moving on")
+            return False
 
-    def _check_grib(self, url: str, min_content_length: int = 10) -> bool:
+    async def _check_grib(
+        self,
+        url: str, min_content_length: int = 10,
+        client: httpx.AsyncClient = None
+    ) -> bool:
         """
         Check that the GRIB2 URL exist and is of useful length.
 
@@ -435,21 +456,22 @@ class Herbie:
             providing this right (see #114). I decreased to 10 and
             essentially turned off this check.
         """
-        head = requests.head(url)
-        check_exists = head.ok
-        if check_exists and "Content-Length" in head.raw.info():
-            check_content = int(head.raw.info()["Content-Length"]) > min_content_length
-            return check_exists and check_content
-        else:
-            return False
+        if client is None:
+            client = self.client
 
-    def _check_idx(self, url: str, verbose: bool = False) -> tuple[bool, Optional[str]]:
+        response: httpx.Response = await client.head(url)
+        return response.is_success and int(response.headers.get("Content-Length", 0)) > min_content_length
+
+    async def _check_idx(self, url: str, verbose: bool = False, client: httpx.AsyncClient | None = None) -> tuple[bool, typing.Optional[str]]:
         """Check if an index file exist for the GRIB2 URL."""
         # To check inventory files with slightly different URL structure
         # we will loop through the IDX_SUFFIX.
 
+        if client is None:
+            client = self.client
+
         if verbose:
-            print(f"🐜 {self.IDX_SUFFIX=}")
+            print(f"{self.IDX_SUFFIX=}")
 
         # Initialize variable to avoid UnboundLocalError
         idx_exists = False
@@ -467,9 +489,11 @@ class Herbie:
                         "https://planetarycomputer.microsoft.com/api/sas/v1/sign?href="
                         + idx_url
                     )
-                    response = requests.get(dl_url)
+                    LOGGER.info(f"Getting index information from azure to get the correct url for '{dl_url}'")
+                    response = await client.get(dl_url)
                     idx_url = response.json()["href"]
-                idx_exists = requests.head(idx_url).ok
+                response = await client.head(idx_url)
+                idx_exists = response.is_success
             except Exception as e:
                 if verbose:
                     print(
@@ -477,19 +501,19 @@ class Herbie:
                     )
 
             if verbose:
-                print(f"🐜 {idx_url=}")
-                print(f"🐜 {idx_exists=}")
+                print(f"{idx_url=}")
+                print(f"{idx_exists=}")
             if idx_exists:
                 return idx_exists, idx_url
 
         if verbose:
-            print(
-                "⚠ Herbie didn't find any inventory files that",
+            LOGGER.info(
+                f"({self}) didn't find any inventory files that",
                 f"exists from {self.IDX_SUFFIX}",
             )
         return False, None
 
-    def find_grib(self) -> tuple[Optional[Union[Path, str]], Optional[str]]:
+    def find_grib(self) -> tuple[Path | str | None, str | None]:
         """Find a GRIB file from the archive sources.
 
         Returns
@@ -534,14 +558,17 @@ class Herbie:
             if source.startswith("local"):
                 grib_path = Path(grib_url)
                 if grib_path.exists():
-                    return (grib_path, source)
+                    return grib_path, source
             elif self._check_grib(grib_url):
-                return (grib_url, source)
+                return grib_url, source
 
-        return (None, None)
+        return None, None
 
-    def find_idx(self) -> tuple[Optional[Union[Path, str]], Optional[str]]:
+    async def find_idx(self, client: httpx.AsyncClient = None) -> tuple[typing.Optional[typing.Union[Path, str]], typing.Optional[str]]:
         """Find an index file for the GRIB file."""
+
+        if client is None:
+            client = self.client
 
         # But first, if overwrite is False, then check if the GRIB2 inventory file exists locally.
         if not self.overwrite:
@@ -561,7 +588,7 @@ class Herbie:
                     local_idx = local_grib.with_suffix(local_grib.suffix + suffix)
 
                 if local_idx.exists() and not self.overwrite:
-                    return (local_idx, "local")
+                    return local_idx, "local"
 
                 # If the index file does not exists locally, we will need to try another variation of the index file name.
                 # This is the case of IFS, where the grib file ends with ".grib2" and the index file is ".index"
@@ -569,7 +596,7 @@ class Herbie:
                 else:
                     local_idx = local_grib.with_suffix(suffix)
                     if local_idx.exists() and not self.overwrite:
-                        return (local_idx, "local")
+                        return local_idx, "local"
 
         # If priority list is set, we want to search SOURCES in that
         # priority order. If priority is None, then search all SOURCES
@@ -586,7 +613,7 @@ class Herbie:
             if "pando" in source:
                 # Sometimes pando returns a bad handshake. Pinging
                 # pando first can help prevent that.
-                self._ping_pando()
+                await self._ping_pando()
 
             # Get the file URL for the source and determine if the
             # GRIB2 file and the index file exist. If found, store the
@@ -596,7 +623,7 @@ class Herbie:
                     "https://planetarycomputer.microsoft.com/api/sas/v1/sign?href="
                     + self.SOURCES[source]
                 )
-                response = requests.get(download_url)
+                response = await client.get(download_url)
                 grib_url = response.json()["href"]
             else:
                 grib_url = self.SOURCES[source]
@@ -605,17 +632,17 @@ class Herbie:
                 local_grib = Path(grib_url)
                 local_idx = local_grib.with_suffix(self.IDX_SUFFIX[0])
                 if local_idx.exists():
-                    return (local_idx, "local")
+                    return local_idx, "local"
             else:
-                idx_exists, idx_url = self._check_idx(self.SOURCES[source])
+                idx_exists, idx_url = await self._check_idx(self.SOURCES[source])
 
                 if idx_exists:
-                    return (idx_url, source)
+                    return idx_url, source
 
-        return (None, None)
+        return None, None
 
     @property
-    def get_remoteFileName(self, source: Optional[str] = None) -> str:
+    def get_remoteFileName(self, source: typing.Optional[str] = None) -> str:
         """Predict remote file name."""
         if source is None:
             if hasattr(self, "grib_source") and self.grib_source != "local":
@@ -633,7 +660,7 @@ class Herbie:
         return self.LOCALFILE
 
     def get_localFilePath(
-        self, search: Optional[str] = None, *, searchString=None
+        self, search: typing.Optional[str] = None, *, searchString=None
     ) -> Path:
         """Get full path to the local file."""
         # TODO: Remove this check for searString eventually
@@ -927,10 +954,10 @@ class Herbie:
 
     def inventory(
         self,
-        search: Optional[str] = None,
+        search: str | None = None,
         *,
         searchString=None,
-        verbose: Optional[bool] = None,
+        verbose: bool | None = None,
     ) -> pd.DataFrame:
         """
         Inspect the GRIB2 file contents by reading the index file.
@@ -986,14 +1013,14 @@ class Herbie:
 
     def download(
         self,
-        search: Optional[str] = None,
+        search: str | None = None,
         *,
-        searchString=None,
-        source: Optional[str] = None,
-        save_dir: Optional[Union[str, Path]] = None,
-        overwrite: Optional[bool] = None,
-        verbose: Optional[bool] = None,
-        errors: Literal["warn", "raise"] = "warn",
+        searchString = None,
+        source: str | None = None,
+        save_dir: typing.Optional[typing.Union[str, Path]] = None,
+        overwrite: typing.Optional[bool] = None,
+        verbose: typing.Optional[bool] = None,
+        errors: typing.Literal["warn", "raise"] = "warn",
     ) -> Path:
         """
         Download file from source.
@@ -1061,7 +1088,7 @@ class Herbie:
                 if verbose:
                     for _, row in subset_group.iterrows():
                         print(
-                            f"  {row.grib_message:<3g} {ANSI.orange}{row.search_this}{ANSI.reset}"
+                            f"  {row.grib_message:<3g} {row.search_this}"
                         )
 
                 start_byte = subset_group.start_byte.min()
@@ -1225,7 +1252,7 @@ class Herbie:
 
     def xarray(
         self,
-        search: Optional[str] = None,
+        search: typing.Optional[str] = None,
         *,
         searchString=None,
         backend_kwargs: dict = {},
