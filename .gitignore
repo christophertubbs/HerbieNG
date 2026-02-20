@@ -53,3 +53,6 @@ src/herbie/_version.py
 
 .ruff_cache/
 uv.lock
+
+.vscode/
+.idea/

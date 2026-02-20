@@ -1,11 +1,17 @@
 [project]
-name = "herbie-data"
+name = "herbie-ng"
 description = "Download numerical weather prediction GRIB2 model data."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { file = "LICENSE" }
-authors = [{ name = "Brian K. Blaylock", email = "blaylockbk@gmail.com" }]
-maintainers = [{ name = "Brian K. Blaylock", email = "blaylockbk@gmail.com" }]
+authors = [
+    { name = "Brian K. Blaylock", email = "blaylockbk@gmail.com" },
+    { name = "Christopher Tubbs", email = "christopherotubbs@gmail.com" }
+]
+maintainers = [
+    { name = "Brian K. Blaylock", email = "blaylockbk@gmail.com" },
+    { name = "Christopher Tubbs", email = "christopherotubbs@gmail.com" }
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
@@ -38,15 +44,15 @@ dependencies = [
     "pyproj>=3.7.0",
     "requests>=2.23.3",
     "xarray>=2025.1.1",
+    "httpx"
 ]
 dynamic = ["version"]
 
 [project.urls]
-"Homepage" = "https://github.com/blaylockbk/Herbie"
-"Documentation" = "https://herbie.readthedocs.io/"
-"Repository" = "https://github.com/blaylockbk/Herbie"
-"Changelog" = "https://github.com/blaylockbk/Herbie/releases"
-"Bug Tracker" = "https://github.com/blaylockbk/Herbie/issues"
+"Homepage" = "https://github.com/christophertubbs/HerbieNG"
+"Repository" = "https://github.com/christophertubbs/HerbieNG"
+"Changelog" = "https://github.com/christophertubbs/HerbieNG/releases"
+"Bug Tracker" = "https://github.com/christophertubbs/HerbieNG/issues"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

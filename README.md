@@ -1,30 +1,14 @@
 <div align="center">
 
-![Herbie Logo](https://github.com/blaylockbk/Herbie/blob/main/images/logo_new/Herbie-logo.png?raw=True)
-
-# Herbie: Download Weather Forecast Model Data in Python 🏁
+# HerbieNG: Download Weather Forecast Model Data in Python
 
 **Access HRRR, GFS, RAP, GEFS, IFS and more!**
 
 <!-- Badges -->
 
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/herbie-data)](https://pypi.org/project/herbie-data/) 
-[![PyPI](https://img.shields.io/pypi/v/herbie-data)](https://pypi.python.org/pypi/herbie-data/)
-[![Conda Version](https://img.shields.io/conda/vn/conda-forge/herbie-data)](https://anaconda.org/conda-forge/herbie-data)
-[![DOI](https://zenodo.org/badge/275214142.svg)](https://zenodo.org/badge/latestdoi/275214142)
-
-[![Tests (Conda)](https://github.com/blaylockbk/Herbie/actions/workflows/tests-conda.yml/badge.svg)](https://github.com/blaylockbk/Herbie/actions/workflows/tests-conda.yml)
-[![Tests (Python)](https://github.com/blaylockbk/Herbie/actions/workflows/tests-python.yml/badge.svg)](https://github.com/blaylockbk/Herbie/actions/workflows/tests-python.yml)
-[![Documentation Status](https://readthedocs.org/projects/herbie/badge/?version=latest)](https://herbie.readthedocs.io/?badge=latest)
+[![Tests (Conda)](https://github.com/christophertubbs/HerbieNG/actions/workflows/tests-conda.yml/badge.svg)](https://github.com/blaylockbk/Herbie/actions/workflows/tests-conda.yml)
+[![Tests (Python)](https://github.com/christophertubbs/HerbieNG/actions/workflows/tests-python.yml/badge.svg)](https://github.com/blaylockbk/Herbie/actions/workflows/tests-python.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-
-[![Conda Downloads](https://img.shields.io/conda/d/conda-forge/herbie-data)](https://anaconda.org/conda-forge/herbie-data)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/herbie-data?label=pypi|downloads)](https://pypistats.org/packages/herbie-data)
-![PyPI - License](https://img.shields.io/pypi/l/herbie-data)
-
-## 📚 [Documentation](https://herbie.readthedocs.io/) | 💬 [Discussions](https://github.com/blaylockbk/Herbie/discussions) | ❔ [Get Help](https://github.com/blaylockbk/Herbie/discussions/categories/q-a)
-
-See also the [DeepWiki](https://deepwiki.com/blaylockbk/Herbie) generated docs.
 
 <!-- (Badges) -->
 
@@ -32,9 +16,9 @@ See also the [DeepWiki](https://deepwiki.com/blaylockbk/Herbie) generated docs.
 
 ---
 
-## What is Herbie?
+## What is HerbieNG?
 
-Herbie is a Python package that makes downloading and working with numerical weather prediction (NWP) model data simple and fast. Whether you're a researcher, meteorologist, data scientist, or weather enthusiast, Herbie provides easy access to forecast data from NOAA, ECMWF, and other sources.
+HerbieNG is a fork of the [Herbie](https://github.com/blaylockbk/Herbie) Python package that makes downloading and working with numerical weather prediction (NWP) model data simple and fast. Whether you're a researcher, meteorologist, data scientist, or weather enthusiast, Herbie provides easy access to forecast data from NOAA, ECMWF, and other sources.
 
 **Key Features:**
 - 🌐 **Access 15+ weather models** - HRRR, GFS, RAP, GEFS, ECMWF, and more
@@ -54,25 +38,14 @@ Herbie is a Python package that makes downloading and working with numerical wea
 
 ### Installation
 
-**With conda or mamba:**
+**With conda or pip:**
 ```bash
-conda install -c conda-forge herbie-data
-```
-```bash
-mamba install -c conda-forge herbie-data
-```
-
-**With pip:**
-```bash
-pip install herbie-data
-```
-
-**With uv:**
-```bash
-uv add herbie-data
+python3 -m pip install -e .
 ```
 
 *Note: optional features require manual installation of wgrib2*
+
+*Note: make sure you use `python3 -m pip` if conda is in use*
 
 ### Simple Example
 
@@ -241,27 +214,9 @@ Herbie automatically searches for data at multiple data sources:
 
 ## Documentation & Help
 
-📘 **[Full Documentation](https://herbie.readthedocs.io/)** - Comprehensive guides and API reference
+💬 **[GitHub Discussions](https://github.com/christophertubbs/HerbieNG/discussions)** - Ask questions and share ideas
 
-🖼️ **[Example Gallery](https://herbie.readthedocs.io/en/latest/gallery/index.html)** - Browse code examples for each model
-
-💬 **[GitHub Discussions](https://github.com/blaylockbk/Herbie/discussions)** - Ask questions and share ideas
-
-🚑 **[Report Issues](https://github.com/blaylockbk/Herbie/issues)** - Found a bug? Let us know
-
----
-
-## Citation & Acknowledgment
-
-If Herbie played an important role in your work, please [tell us about it](https://github.com/blaylockbk/Herbie/discussions/categories/show-and-tell)! 
-
-### Suggested Citation
-
-> Blaylock, B. K. (YEAR). Herbie: Retrieve Numerical Weather Prediction Model Data (Version 20xx.x.x) [Computer software]. https://doi.org/10.5281/zenodo.4567540
-
-### Suggested Acknowledgment
-
-> A portion of this work used code generously provided by Brian Blaylock's Herbie python package (https://doi.org/10.5281/zenodo.4567540)
+🚑 **[Report Issues](https://github.com/christophertubbs/HerbieNG/issues)** - Found a bug? Let us know
 
 ---
 
@@ -271,63 +226,8 @@ We welcome contributions! Here's how you can help:
 
 - ⭐ Star this repository
 - 👀 Watch for new discussions and issues
-- 💬 Participate in [GitHub Discussions](https://github.com/blaylockbk/Herbie/discussions)
-- 🙌 Share your work in [Show and Tell](https://github.com/blaylockbk/Herbie/discussions/categories/show-and-tell)
-- 🐛 Report bugs or suggest features via [Issues](https://github.com/blaylockbk/Herbie/issues)
+- 💬 Participate in [GitHub Discussions](https://github.com/christophertubbs/HerbieNG/discussions)
+- 🐛 Report bugs or suggest features via [Issues](https://github.com/christophertubbs/HerbieNG/issues)
 - 📝 Improve documentation
 - 🧪 Test latest releases
 - 💻 Submit pull requests
-
-Read the [Contributing Guide](https://herbie.readthedocs.io/en/stable/user_guide/housekeeping/disclaimer.html) for more details.
-
----
-
-
-## Project History and Background
-
-During my PhD at the University of Utah, I created, at the time, the [only publicly-accessible archive of HRRR data](http://hrrr.chpc.utah.edu/). Over 1,000 research scientists and professionals used that archive.
-
-<blockquote><cite>
-<p style="padding-left: 22px ; text-indent: -22px ;"> Blaylock B., J. Horel and S. Liston, 2017: Cloud Archiving and Data Mining of High Resolution Rapid Refresh Model Output. Computers and Geosciences. 109, 43-50. <a href="https://doi.org/10.1016/j.cageo.2017.08.005">https://doi.org/10.1016/j.cageo.2017.08.005</a>.</p>
-</cite></blockquote>
-
-Herbie was then developed to access HRRR data from that archive and was first used on the Open Science Grid.
-
-<blockquote><cite>
-<p style="padding-left: 22px ; text-indent: -22px ;"> Blaylock, B. K., J. D. Horel, and C. Galli, 2018: High-Resolution Rapid Refresh Model Data Analytics Derived on the Open Science Grid to Assist Wildland Fire Weather Assessment. J. Atmos. Oceanic Technol., 35, 2213–2227, <a href="https://doi.org/10.1175/JTECH-D-18-0073.1">https://doi.org/10.1175/JTECH-D-18-0073.1</a>.</p>
-</cite></blockquote>
-
-In 2020, the HRRR dataset was made available through the [NOAA Open Data Dissemination Program](https://www.noaa.gov/information-technology/open-data-dissemination). Herbie evolved from my original download scripts into a comprehensive package supporting multiple models and data sources.
-
-**Name Origin:** I originally released this package under the name “HRRR-B” because it only worked with the HRRR dataset; the “B” was for Brian. Since then, I have added the ability to download many more models including RAP, GFS, ECMWF, GEFS, and RRFS with the potential to add more models in the future. Thus, this package was renamed **_Herbie_**, named after one of my favorite childhood movies.
-
-The University of Utah MesoWest group now manages a [HRRR archive in Zarr format](http://hrrr.chpc.utah.edu/). Maybe someday, Herbie will be able to take advantage of that archive.
-
-## About the Author
-
-**Thanks for using Herbie, and happy racing!** 🏁
-
-Brian Blaylock  
-[🌐 Personal Webpage](http://home.chpc.utah.edu/~u0553130/Brian_Blaylock/home.html)
-
-### Other Projects by Brian
-
-- [🌎 **GOES-2-go**](https://github.com/blaylockbk/goes2go) - Download GOES satellite data and create RGB composites
-- [🌡 **SynopticPy**](https://github.com/blaylockbk/SynopticPy) - Access mesonet data from the Synoptic API  
-- [🔨 **Carpenter Workshop**](https://github.com/blaylockbk/Carpenter_Workshop) - Useful tools for meteorological data analysis
-- [💬 **Bubble Print**](https://github.com/blaylockbk/BubblePrint) - Add personality to your Python print statements
-- [🌹 **Pandas Rose**](https://github.com/blaylockbk/pandas-rose) - Easier wind rose plots
-- [📜 **MET Syntax**](https://github.com/blaylockbk/vscode-met-syntax) - VS Code syntax highlighting for Model Evaluation Tools
-
----
-
-## Alternative Tools
-
-**rclone:** As an alternative to Herbie, you can use [rclone](https://rclone.org/) to download files from remote archives. I love rclone. Here's a [short rclone tutorial](https://github.com/blaylockbk/pyBKB_v3/blob/master/rclone_howto.md).
-
----
-
-## Project Statistics
-
-| [Visualize Structure](https://mango-dune-07a8b7110.1.azurestaticapps.net/?repo=blaylockbk%2FHerbie) | [Star History](https://star-history.com/#blaylockbk/Herbie&Date) | [PyPI Statistics](https://pypistats.org/packages/herbie-data) |
-|---|---|---|
