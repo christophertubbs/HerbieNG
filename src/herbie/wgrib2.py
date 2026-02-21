@@ -27,10 +27,11 @@ Usage
 
 """
 
-from herbie import Path
+import pathlib
 from shutil import which
 import subprocess
 
+from herbie.utils.common import expand_path
 
 def run_command(cmd):
     p = subprocess.run(
@@ -51,7 +52,7 @@ class _WGRIB2:
 
     def inventory(self, FILE):
         """Return wgrib2-style inventory of GRIB2 file."""
-        cmd = f"{self.wgrib2} -s {Path(FILE).expand()}"
+        cmd = f"{self.wgrib2} -s {expand_path(FILE)}"
         return run_command(cmd)
 
     def create_inventory_file(self, path, suffix=".grib2"):
@@ -69,7 +70,7 @@ class _WGRIB2:
             If path specified is a directory, then this is the suffix to
             look for GRIB2 files.
         """
-        path = Path(path).expand()
+        path = expand_path(path)
         if path.is_dir():
             # List all GRIB2 files in the directory
             files = list(path.rglob(f"*{suffix}"))
@@ -117,7 +118,7 @@ class _WGRIB2:
         create_idx : bool
             If True, then make an inventory file for the GRIB2 region subest.
         """
-        path = Path(path).expand()
+        path = expand_path(path)
         if path.is_dir():
             # List all GRIB2 files in the directory
             files = list(path.rglob(f"*{suffix}"))
@@ -139,7 +140,7 @@ class _WGRIB2:
         for f in files:
             OUTFILE = path.parent / f"{name}_{path.name}"
 
-            cmd = f"{self.wgrib2} {Path(path).expand()} -small_grib {lon_min}:{lon_max} {lat_min}:{lat_max} {OUTFILE} -set_grib_type same"
+            cmd = f"{self.wgrib2} {expand_path(path)} -small_grib {lon_min}:{lon_max} {lat_min}:{lat_max} {OUTFILE} -set_grib_type same"
 
             run_command(cmd)
 
@@ -170,7 +171,7 @@ class _WGRIB2:
         path : path-like
             Path to the grib2 file.
         """
-        cmd = f"{self.wgrib2} -vector_dir {Path(path).expand()}"
+        cmd = f"{self.wgrib2} -vector_dir {expand_path(path)}"
 
         out = run_command(cmd)
         relative = {i.split(":")[-1] for i in out.split()}

@@ -3,7 +3,7 @@ You are looking under Herbie's hood, his engine.
 
 TODO: Rename 'fxx' to 'step' and allow pandas-parsable timedelta string like "6h".
 TODO: add `idx_to_df()` and `df_to_idx()` methods.
-TODO: There are probably use cases for the `Path().suffixes` method
+TODO: There are probably use cases for the `pathlib.Path().suffixes` method
 """
 import functools
 import hashlib
@@ -28,18 +28,17 @@ import xarray as xr
 from pyproj import CRS
 
 import herbie.models as model_templates
-from herbie import Path
 from herbie import config
 from herbie.configuration import settings
 from herbie.crs import get_cf_crs
 from herbie.help import _search_help
 from herbie.utils.log import get_logger
+from herbie.utils.common import expand_path
 
 Datetime = typing.Union[datetime, pd.Timestamp, str]
 
 # NOTE: The config dict values are retrieved from __init__ and read
 # from the file ${HOME}/.config/herbie/config.toml
-# Path is imported from __init__ because it has my custom methods.
 
 LOGGER: logging.Logger = get_logger(__file__)
 
@@ -96,13 +95,13 @@ async def download_with_requests(
                 reporthook(downloaded // chunk_size, chunk_size, total)
 
 
-def wgrib2_idx(grib2filepath: Path | str) -> str:
+def wgrib2_idx(grib2filepath: pathlib.Path | str) -> str:
     """
     Produce the GRIB2 inventory index with wgrib2.
 
     Parameters
     ----------
-    grib2filepath : Path or str
+    grib2filepath : pathlib.Path or str
         Path to a grib2 file.
 
     Returns
@@ -135,7 +134,7 @@ def wgrib2_idx(grib2filepath: Path | str) -> str:
         ) from e
 
 
-def create_index_files(path: typing.Union[Path, str], overwrite: bool = False) -> None:
+def create_index_files(path: typing.Union[pathlib.Path, str], overwrite: bool = False) -> None:
     """Create an index file for all GRIB2 files in a directory.
 
     Parameters
@@ -145,7 +144,7 @@ def create_index_files(path: typing.Union[Path, str], overwrite: bool = False) -
     overwrite : bool
         Overwrite index file if it exists.
     """
-    path = Path(path)
+    path = pathlib.Path(path)
     files = []
     if path.is_dir():
         # List all GRIB2 files in the directory
@@ -158,11 +157,11 @@ def create_index_files(path: typing.Union[Path, str], overwrite: bool = False) -
         raise ValueError(f"No grib2 files were found in {path}")
 
     for f in files:
-        f_idx = Path(str(f) + ".idx")
+        f_idx = pathlib.Path(str(f) + ".idx")
         if not f_idx.exists() or overwrite:
             # Create an index using wgrib2's simple inventory option
             # if it doesn't already exist or if overwrite is True.
-            index_data = wgrib2_idx(Path(f))
+            index_data = wgrib2_idx(pathlib.Path(f))
             with open(f_idx, "w+") as out_idx:
                 out_idx.write(index_data)
 
@@ -229,7 +228,7 @@ class Herbie:
         fxx: int = config["default"].get("fxx"),
         product: str = config["default"].get("product"),
         priority: str | list[str] = config["default"].get("priority"),
-        save_dir: Path | str = config["default"].get("save_dir"),
+        save_dir: pathlib.Path | str = config["default"].get("save_dir"),
         overwrite: bool = config["default"].get("overwrite", False),
         verbose: bool = config["default"].get("verbose", True),
         client: httpx.AsyncClient = None,
@@ -276,7 +275,7 @@ class Herbie:
             )
 
         self.priority = priority
-        self.save_dir = Path(save_dir).expand()
+        self.save_dir = expand_path(save_dir)
         self.overwrite = overwrite
         self.verbose = verbose
 
@@ -478,7 +477,7 @@ class Herbie:
 
         # Loop through IDX_SUFFIX options until we find one that exists
         for i in self.IDX_SUFFIX:
-            if Path(url).suffix in {".grb", ".grib", ".grb2", ".grib2"}:
+            if pathlib.Path(url).suffix in {".grb", ".grib", ".grb2", ".grib2"}:
                 idx_url = url.rsplit(".", maxsplit=1)[0] + i
             else:
                 idx_url = url + i
@@ -513,7 +512,7 @@ class Herbie:
             )
         return False, None
 
-    def find_grib(self) -> tuple[Path | str | None, str | None]:
+    def find_grib(self) -> tuple[pathlib.Path | str | None, str | None]:
         """Find a GRIB file from the archive sources.
 
         Returns
@@ -556,7 +555,7 @@ class Herbie:
             else:
                 grib_url = self.SOURCES[source]
             if source.startswith("local"):
-                grib_path = Path(grib_url)
+                grib_path = pathlib.Path(grib_url)
                 if grib_path.exists():
                     return grib_path, source
             elif self._check_grib(grib_url):
@@ -564,7 +563,7 @@ class Herbie:
 
         return None, None
 
-    async def find_idx(self, client: httpx.AsyncClient = None) -> tuple[typing.Optional[typing.Union[Path, str]], typing.Optional[str]]:
+    async def find_idx(self, client: httpx.AsyncClient = None) -> tuple[typing.Optional[typing.Union[pathlib.Path, str]], typing.Optional[str]]:
         """Find an index file for the GRIB file."""
 
         if client is None:
@@ -629,7 +628,7 @@ class Herbie:
                 grib_url = self.SOURCES[source]
 
             if source.startswith("local"):
-                local_grib = Path(grib_url)
+                local_grib = pathlib.Path(grib_url)
                 local_idx = local_grib.with_suffix(self.IDX_SUFFIX[0])
                 if local_idx.exists():
                     return local_idx, "local"
@@ -661,7 +660,7 @@ class Herbie:
 
     def get_localFilePath(
         self, search: typing.Optional[str] = None, *, searchString=None
-    ) -> Path:
+    ) -> pathlib.Path:
         """Get full path to the local file."""
         # TODO: Remove this check for searString eventually
         if searchString is not None:
@@ -682,9 +681,9 @@ class Herbie:
         if any([i.startswith("local") for i in self.SOURCES.keys()]):
             localFilePath = next(
                 (
-                    Path(self.SOURCES[i])
+                    pathlib.Path(self.SOURCES[i])
                     for i in self.SOURCES
-                    if i.startswith("local") and Path(self.SOURCES[i]).exists()
+                    if i.startswith("local") and pathlib.Path(self.SOURCES[i]).exists()
                 ),
                 localFilePath,
             )
@@ -730,7 +729,7 @@ class Herbie:
 
         return localFilePath
 
-    def get_localIndexFilePath(self) -> Path:
+    def get_localIndexFilePath(self) -> pathlib.Path:
         """Get full path to the local index file."""
 
         # Get the local file path, which creates the directory structure
@@ -758,7 +757,7 @@ class Herbie:
         elif self.idx is None:
             if self.grib_source == "local":
                 # Use wgrib2 to get the index file if the file is local
-                log.info("🧙🏻‍♂️ I'll use wgrib2 to create the missing index file.")
+                LOGGER.debug("wgrib2 will be used to create the missing index file.")
                 self.idx = StringIO(wgrib2_idx(self.get_localFilePath()))
                 self.IDX_STYLE = "wgrib2"
             else:
@@ -1017,11 +1016,11 @@ class Herbie:
         *,
         searchString = None,
         source: str | None = None,
-        save_dir: typing.Optional[typing.Union[str, Path]] = None,
+        save_dir: typing.Optional[typing.Union[str, pathlib.Path]] = None,
         overwrite: typing.Optional[bool] = None,
         verbose: typing.Optional[bool] = None,
         errors: typing.Literal["warn", "raise"] = "warn",
-    ) -> Path:
+    ) -> pathlib.Path:
         """
         Download file from source.
 
@@ -1063,7 +1062,7 @@ class Herbie:
             grib_source = self.grib
 
             # Check if the source is a local file
-            is_local = isinstance(grib_source, Path) or (
+            is_local = isinstance(grib_source, pathlib.Path) or (
                 isinstance(grib_source, str)
                 and not grib_source.startswith(("http://", "https://"))
             )
@@ -1158,10 +1157,7 @@ class Herbie:
 
         # This overrides the save_dir specified in __init__
         if save_dir is not None:
-            self.save_dir = Path(save_dir).expand()
-
-        if not hasattr(Path(self.save_dir).expand(), "exists"):
-            self.save_dir = Path(self.save_dir).expand()
+            self.save_dir = expand_path(save_dir)
 
         # If the file exists in the localPath and we don't want to
         # overwrite, then we don't need to download it.
@@ -1170,7 +1166,7 @@ class Herbie:
         if save_dir is not None:
             # Looks like the save_dir was changed.
             outFile = (
-                self.save_dir.expand()
+                expand_path(self.save_dir)
                 / self.model
                 / f"{self.date:%Y%m%d}"
                 / outFile.name
@@ -1205,14 +1201,14 @@ class Herbie:
         if self.grib is None:
             msg = f"🦨 GRIB2 file not found: {self.model=} {self.date=} {self.fxx=}"
             if errors == "warn":
-                log.warning(msg)
+                LOGGER.warning(msg)
                 return  # Can't download anything without a GRIB file URL.
             elif errors == "raise":
                 raise ValueError(msg)
         if self.idx is None and search is not None:
             msg = f"🦨 Index file not found; cannot download subset: {self.model=} {self.date=} {self.fxx=}"
             if errors == "warn":
-                log.warning(
+                LOGGER.warning(
                     msg + " I will download the full file because I cannot subset."
                 )
             elif errors == "raise":
@@ -1288,11 +1284,12 @@ class Herbie:
 
         local_file = self.get_localFilePath(search)
 
+        # TODO: Handle internal state better - this mutation may have unexpected behavior
         if "save_dir" in download_kwargs:
             # Looks like the save_dir was changed.
-            self.save_dir = Path(download_kwargs["save_dir"]).expand()
+            self.save_dir = expand_path(download_kwargs["save_dir"])
             local_file = (
-                self.save_dir.expand()
+                self.save_dir
                 / self.model
                 / f"{self.date:%Y%m%d}"
                 / local_file.name

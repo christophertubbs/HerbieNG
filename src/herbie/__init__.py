@@ -48,45 +48,16 @@ except Exception:
 
 
 ########################################################################
-# Overload Path object with my custom `expand` method so the user can
-# set environment variables in the config file (e.g., ${HOME}).
-def _expand(self, resolve: bool = False, absolute: bool = False) -> Path:
-    """
-    Fully expand the Path with the given environment variables.
-
-    Optionally, resolve the path.
-
-    Example
-    -------
-    >>> Path('$HOME').expand()
-    Results in PosixPath('/p/home/blaylock')
-    """
-    p = Path(os.path.expandvars(self)).expanduser()
-
-    if resolve:
-        # TODO Why does this get stuck sometimes??
-        p = p.resolve()
-
-    if absolute:
-        p = p.absolute()
-
-    return p
-
-
-Path.expand = _expand
-
-########################################################################
 # Location of Herbie's configuration file
 _config_path = os.getenv("HERBIE_CONFIG_PATH", "~/.config/herbie")
-_config_path = Path(_config_path).expand()
+_config_path = expand_path(_config_path)
 _config_file = _config_path / "config.toml"
 
 # Default directory Herbie saves model output
 # NOTE: The `\\` is an escape character in TOML.
 #       For Windows paths, "C:\\user\\"" needs to be "C:\\\\user\\\\""
 _save_dir = os.getenv("HERBIE_SAVE_DIR", "~/data")
-_save_dir = Path(_save_dir).expand()
-_save_dir = str(_save_dir).replace("\\", "\\\\")
+_save_dir = expand_path(_save_dir)
 
 # Default TOML Configuration Values
 default_toml = f"""# Herbie defaults
@@ -94,7 +65,7 @@ default_toml = f"""# Herbie defaults
 [default]
 model = "hrrr"
 fxx = 0
-save_dir = "{_save_dir}"
+save_dir = "{str(_save_dir).replace("\\", "\\\\")}"
 overwrite = false
 verbose = true
 
@@ -191,10 +162,10 @@ except Exception:
 
 
 # Expand the full path for `save_dir`
-config["default"]["save_dir"] = Path(config["default"]["save_dir"]).expand()
+config["default"]["save_dir"] = expand_path(config["default"]["save_dir"])
 
 if os.getenv("HERBIE_SAVE_DIR"):
-    config["default"]["save_dir"] = Path(os.getenv("HERBIE_SAVE_DIR")).expand()
+    config["default"]["save_dir"] = expand_path(os.getenv("HERBIE_SAVE_DIR"))
     print(
         f" ╭─{ANSI.herbie}─────────────────────────────────────────────╮\n"
         f" │ INFO: Overriding the configured save_dir because the │\n"
