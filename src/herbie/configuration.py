@@ -1,14 +1,17 @@
 """
 System wide settings for runtime configuration
 """
+import collections.abc as generic
 import enum
 import os
 import pathlib
 import typing
+from threading import RLock
 
 _SOURCE_PATH: pathlib.Path = pathlib.Path(__file__)
 
 APP_PREFIX: typing.Final[str] = "HERBIE_NG"
+MISSING: object = object()
 
 
 def _is_true(value) -> bool:
@@ -29,58 +32,111 @@ class EnvironmentKey(enum.StrEnum):
     LOG_OVERRIDE_PATH = f"{APP_PREFIX}_LOG_OVERRIDE_PATH"
     LOG_CONFIG_PATH = f"{APP_PREFIX}_LOG_CONFIG_PATH"
     PANDO_URL = f"{APP_PREFIX}_PANDO_URL"
+    TEMPLATE_DIRECTORY = f"{APP_PREFIX}_TEMPLATE_DIRECTORY"
+    DEFAULT_MODEL = f"{APP_PREFIX}_DEFAULT_MODEL"
+    SAVE_DIRECTORY = f"{APP_PREFIX}_SAVE_DIRECTORY"
+    TOML_CONFIGURATION_PATH = f"{APP_PREFIX}_TOML_CONFIG_PATH"
 
 
-class _Settings:
+def _find_root_directory() -> pathlib.Path:
+    directory: pathlib.Path | str | None = os.environ.get(EnvironmentKey.ROOT_DIRECTORY)
+
+    if not directory:
+        library_name: str = EnvironmentKey.__module__.split(".")[0]
+
+        directory: pathlib.Path = _SOURCE_PATH
+        while directory.name != library_name:
+            directory = directory.parent
+
+    if isinstance(directory, str):
+        directory = pathlib.Path(directory)
+
+    return directory
+
+
+_DEFAULT_SETTINGS: generic.Mapping[EnvironmentKey, typing.Any | generic.Callable[[], typing.Any]] = {
+    EnvironmentKey.APPLICATION_NAME: "HerbieNG",
+    EnvironmentKey.TOML_CONFIGURATION_PATH: lambda: pathlib.Path.home() / ".config" / f"{_DEFAULT_SETTINGS[EnvironmentKey.APPLICATION_NAME]}.toml",
+    EnvironmentKey.ROOT_DIRECTORY: _find_root_directory(),
+    EnvironmentKey.RESOURCE_DIRECTORY: lambda: _DEFAULT_SETTINGS[EnvironmentKey.ROOT_DIRECTORY] / "resources",
+    EnvironmentKey.CONFIGURATION_DIRECTORY: lambda: _DEFAULT_SETTINGS[EnvironmentKey.RESOURCE_DIRECTORY] / "config",
+    EnvironmentKey.TEMPLATE_DIRECTORY: lambda: _DEFAULT_SETTINGS[EnvironmentKey.RESOURCE_DIRECTORY] / "templates"
+}
+
+
+def _get_application_default(key: EnvironmentKey, default=None) -> typing.Optional[typing.Any]:
+    value = _DEFAULT_SETTINGS.get(key, default)
+    if isinstance(value, generic.Callable):
+        value = value()
+    return value
+
+
+def load_config_toml() -> generic.Mapping[str, typing.Any]:
+    configuration_path: pathlib.Path = pathlib.Path(
+        os.environ.get(EnvironmentKey.TOML_CONFIGURATION_PATH, pathlib.Path.home() / ".config" / "HerbieNG.toml")
+    )
+
+
+class _Settings(generic.Mapping):
+    def __len__(self):
+        with self.__settings_lock:
+            return len(self.__values)
+
+    def __iter__(self):
+        with self.__settings_lock:
+            current_keys: generic.Sequence[str] = list(self.__values.keys())
+            return iter(current_keys)
+
+    def __contains__(self, item):
+        with self.__settings_lock:
+            return item in self.__values
+
     def __init__(self, **kwargs):
+        self.__settings_lock: RLock = RLock()
         self.__values: dict[str, typing.Any] = {
             **os.environ,
             **kwargs
         }
 
     def __getitem__(self, item):
-        return self.__values[item]
+        with self.__settings_lock:
+            return self.__values[item]
 
-    def get(self, key: str, default = None):
-        return self.__values.get(key, default)
+    def get(self, key: str, default=MISSING) -> typing.Any:
+        with self.__settings_lock:
+            if key in self.__values:
+                return self.__values.get(key)
+
+            if default == MISSING and key in EnvironmentKey:
+                default = _get_application_default(EnvironmentKey(key))
+            elif default == MISSING:
+                default = None
+            return self.__values.setdefault(key, default)
 
     @property
     def root(self) -> pathlib.Path:
-        directory: pathlib.Path | str | None = self.get(EnvironmentKey.ROOT_DIRECTORY)
-        if not directory:
-            library_name: str = self.__class__.__module__.split(".")[0]
-            directory: pathlib.Path = _SOURCE_PATH
-            while directory.name != library_name:
-                directory = directory.parent
+        with self.__settings_lock:
+            return pathlib.Path(self.get(EnvironmentKey.ROOT_DIRECTORY))
 
-            self.__values[EnvironmentKey.ROOT_DIRECTORY] = directory
+    def __get_directory(self, key: str, *, default: pathlib.Path = MISSING) -> pathlib.Path:
+        with self.__settings_lock:
+            directory: pathlib.Path | str | None = self.get(key, default=default)
 
-        if isinstance(directory, str):
-            directory = pathlib.Path(directory)
-            self.__values[EnvironmentKey.ROOT_DIRECTORY] = directory
+            if not directory:
+                directory = default
+                self.__values[key] = directory
 
-        return directory
+            if isinstance(directory, str):
+                directory = pathlib.Path(directory)
+                self.__values[key] = directory
 
-    def __get_directory(self, key: str, *, default: pathlib.Path) -> pathlib.Path:
-        directory: pathlib.Path | str | None = self.get(key)
-
-        if not directory:
-            directory = default
-            self.__values[key] = directory
-
-        if isinstance(directory, str):
-            directory = pathlib.Path(directory)
-            self.__values[key] = directory
-
-        return directory
+            return directory
 
     @property
     def resource_directory(self) -> pathlib.Path:
-        directory: pathlib.Path = self.__get_directory(
-            EnvironmentKey.RESOURCE_DIRECTORY,
-            default=self.root / "resources"
+        return self.__get_directory(
+            EnvironmentKey.RESOURCE_DIRECTORY
         )
-        return directory
 
     @property
     def configuration_path(self) -> pathlib.Path:
@@ -108,17 +164,15 @@ class _Settings:
 
     @property
     def debug(self) -> bool:
-        return _is_true(self.__values.get(EnvironmentKey.DEBUG, False))
+        return _is_true(self.__values.setdefault(EnvironmentKey.DEBUG, False))
 
     @property
     def application_name(self) -> str:
-        name: str | None = self.__values.get(EnvironmentKey.APPLICATION_NAME)
-
-        if not name:
-            name = "HerbieNG"
-            self.__values[EnvironmentKey.APPLICATION_NAME] = name
-
-        return name
+        with self.__settings_lock:
+            return self.__values.setdefault(
+                EnvironmentKey.APPLICATION_NAME,
+                _DEFAULT_SETTINGS.get(EnvironmentKey.APPLICATION_NAME)
+            )
 
     @property
     def pando_url(self) -> str:

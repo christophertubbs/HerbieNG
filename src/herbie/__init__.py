@@ -25,8 +25,8 @@ inside and will get you to the finish line. Happy racing! 🏁
 """
 
 import os
+import pathlib
 import tomllib
-from pathlib import Path
 
 from herbie.misc import ANSI
 from herbie.utils.common import expand_path
@@ -49,23 +49,25 @@ except Exception:
 
 ########################################################################
 # Location of Herbie's configuration file
-_config_path = os.getenv("HERBIE_CONFIG_PATH", "~/.config/herbie")
+_config_path = os.getenv("HERBIE_CONFIG_PATH", pathlib.Path.home() / ".config" / "herbie")
 _config_path = expand_path(_config_path)
 _config_file = _config_path / "config.toml"
 
 # Default directory Herbie saves model output
 # NOTE: The `\\` is an escape character in TOML.
 #       For Windows paths, "C:\\user\\"" needs to be "C:\\\\user\\\\""
-_save_dir = os.getenv("HERBIE_SAVE_DIR", "~/data")
-_save_dir = expand_path(_save_dir)
+_save_dir = expand_path(os.getenv("HERBIE_SAVE_DIR", pathlib.Path.home() / "data"))
 
+_configured_save_directory: str = str(_save_dir)
+
+_configured_save_directory = _configured_save_directory.replace("\\", "\\\\")
 # Default TOML Configuration Values
 default_toml = f"""# Herbie defaults
 
 [default]
 model = "hrrr"
 fxx = 0
-save_dir = "{str(_save_dir).replace("\\", "\\\\")}"
+save_dir = "{_configured_save_directory}"
 overwrite = false
 verbose = true
 
